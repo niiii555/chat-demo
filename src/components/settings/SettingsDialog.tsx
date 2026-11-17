@@ -24,6 +24,7 @@ import {
   setLocation,
   setThemePreference,
   setTtsVoice,
+  setModel,
   useSettings,
   type ThemePreference,
 } from '../../services/settings.js'
@@ -34,6 +35,7 @@ import { Select } from '../base/Select.js'
 import { showToast } from '../base/toastState.js'
 import { ApiKeyConfirm, ApiKeyField, useApiKeyEditor } from './ApiKeyField.js'
 import { closeSettings, useSettingsDialog, type SettingsSection } from './settingsDialogState.js'
+import { MODEL_OPTIONS } from '../../services/models.js'
 import styles from './Settings.module.css'
 
 /**
@@ -103,6 +105,7 @@ const SettingsContent = () => {
             </>
           ) : (
             <>
+              <ModelSetting />
               <ApiKeyField editor={apiKeyEditor} />
               <ImportHistory historyImport={historyImport} disabled={historyBusy} />
               <ExportHistory disabled={historyBusy} />
@@ -292,6 +295,25 @@ const LocaleSetting = () => {
 }
 
 /** 朗读音色：stella（海星，女声）/ tide（暗潮，男声） */
+const ModelSetting = () => {
+  const t = useTranslate()
+  const model = useSettings((state) => state.model)
+  return (
+    <SettingCell
+      label={t('settingsModel')}
+      status={null}
+      action={
+        <Select
+          ariaLabel={t('settingsModel')}
+          value={model}
+          options={MODEL_OPTIONS.map((option) => ({ value: option.id, label: option.label }))}
+          onChange={setModel}
+        />
+      }
+    />
+  )
+}
+
 const TtsVoiceSetting = () => {
   const t = useTranslate()
   const ttsVoice = useSettings((state) => state.ttsVoice)

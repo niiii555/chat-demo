@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { TtsVoice } from './api/speech.js'
 import { normalizeLocation, type UserLocation } from './location.js'
+import { DEFAULT_MODEL } from './models.js'
 
 export type Locale = 'zh-CN' | 'en-US'
 
@@ -14,6 +15,8 @@ type Settings = {
   themePreference: ThemePreference
   location: UserLocation | null
   ttsVoice: TtsVoice
+  /** 当前使用的模型 */
+  model: string
   thinking: boolean
   search: boolean
   siderCollapsed: boolean
@@ -25,6 +28,7 @@ const KEYS = {
   location: 'chat-demo:location',
   themePreference: 'chat-demo:theme-preference',
   ttsVoice: 'chat-demo:tts-voice',
+  model: 'chat-demo:model',
   thinking: 'chat-demo:thinking',
   search: 'chat-demo:search',
   siderCollapsed: 'chat-demo:sider-collapsed',
@@ -93,6 +97,7 @@ export const useSettings = create<Settings>(() => ({
   location: initialLocation(),
   themePreference: initialThemePreference(),
   ttsVoice: initialTtsVoice(),
+  model: read(KEYS.model) || DEFAULT_MODEL,
   thinking: read(KEYS.thinking) === 'true',
   search: read(KEYS.search) === 'true',
   siderCollapsed: read(KEYS.siderCollapsed) === 'true',
@@ -112,6 +117,11 @@ export const setLocation = (value: UserLocation | null) => {
 export const setThemePreference = (themePreference: ThemePreference) => {
   write(KEYS.themePreference, themePreference)
   useSettings.setState({ themePreference })
+}
+
+export const setModel = (model: string) => {
+  write(KEYS.model, model)
+  useSettings.setState({ model })
 }
 
 export const setTtsVoice = (ttsVoice: TtsVoice) => {
