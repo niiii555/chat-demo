@@ -1,5 +1,16 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
 import { toSessionSummary, type Session, type SessionSummary } from './types.js'
+import {
+  deleteRemoteSession,
+  getRemoteFile,
+  getRemoteSession,
+  listRemoteSessions,
+  pushFile,
+  pushSession,
+} from './remote.js'
+
+/** 从服务端恢复数据时不要反向回写，避免无意义的重复上传。 */
+let suppressRemotePush = false
 
 /** IndexedDB 存储结构版本；新增或调整存储、索引时递增。 */
 const DB_VERSION = 11
@@ -75,11 +86,47 @@ const getDB = () =>
     throw error
   }))
 
-export const loadSessionSummaries = async (): Promise<SessionSummary[]> =>
-  (await (await getDB()).getAll('sessionSummaries')).map(toSessionSummary)
+export const loadSessionSummaries = async (): Promise<SessionSummary[]> => {
+  const local = (await (await getDB()).getAll('sessionSummaries')).map(toSessionSummary)
+  if (local.length > 0) {
+    return local
+  }
+  // 本地为空（换了浏览器或清过数据）时，从服务端把会话恢复到本地。
+  const remote = await listRemoteSessions()
+  if (remote.length === 0) {
+    return local
+  }
+  suppressRemotePush = true
+  try {
+    for (const summary of remote) {
+      const session = await getRemoteSession(summary.id)
+      if (session) {
+        await saveSession(session)
+      }
+    }
+  } finally {
+    suppressRemotePush = false
+  }
+  return (await (await getDB()).getAll('sessionSummaries')).map(toSessionSummary)
+}
 
-export const loadSession = async (id: string): Promise<Session | undefined> =>
-  (await getDB()).get('sessions', id)
+export const loadSession = async (id: string): Promise<Session | undefined> => {
+  const local = await (await getDB()).get('sessions', id)
+  if (local) {
+    return local
+  }
+  const remote = await getRemoteSession(id)
+  if (!remote) {
+    return undefined
+  }
+  suppressRemotePush = true
+  try {
+    await saveSession(remote)
+  } finally {
+    suppressRemotePush = false
+  }
+  return remote
+}
 
 export const saveSession = async (session: Session, files: StoredFile[] = []): Promise<void> => {
   const summary = storedSummary(session)
@@ -99,6 +146,12 @@ export const saveSession = async (session: Session, files: StoredFile[] = []): P
     })(),
     tx.done,
   ])
+  if (!suppressRemotePush) {
+    pushSession(session)
+    for (const file of files) {
+      pushFile(file.id, file.blob)
+    }
+  }
 }
 
 /** 未打开的会话也可重命名，只读取该会话，原子更新详情和列表。 */
@@ -121,6 +174,12 @@ export const renameSession = async (id: string, title: string): Promise<void> =>
     })(),
     tx.done,
   ])
+  if (!suppressRemotePush) {
+    const renamed = await (await getDB()).get('sessions', id)
+    if (renamed) {
+      pushSession(renamed)
+    }
+  }
 }
 
 /** 删除会话，仅清理已无会话引用的本地原件；远端文件不删。 */
@@ -145,6 +204,9 @@ export const deleteSession = async (sessionId: string): Promise<void> => {
     })(),
     tx.done,
   ])
+  if (!suppressRemotePush) {
+    deleteRemoteSession(sessionId)
+  }
 }
 
 const putFiles = async (store: 'files' | 'filesStaging', files: StoredFile[]) => {
@@ -152,10 +214,26 @@ const putFiles = async (store: 'files' | 'filesStaging', files: StoredFile[]) =>
   await Promise.all([...files.map((file) => tx.store.put(file)), tx.done])
 }
 
-export const saveFiles = (files: StoredFile[]): Promise<void> => putFiles('files', files)
+export const saveFiles = async (files: StoredFile[]): Promise<void> => {
+  await putFiles('files', files)
+  if (!suppressRemotePush) {
+    for (const file of files) {
+      pushFile(file.id, file.blob)
+    }
+  }
+}
 
-export const loadFile = async (id: string): Promise<Blob | undefined> =>
-  (await (await getDB()).get('files', id))?.blob
+export const loadFile = async (id: string): Promise<Blob | undefined> => {
+  const local = (await (await getDB()).get('files', id))?.blob
+  if (local) {
+    return local
+  }
+  const remote = await getRemoteFile(id)
+  if (remote) {
+    await saveFiles([{ id, blob: remote }])
+  }
+  return remote
+}
 
 /** 清空导入暂存：开始导入前清除上次中断（如关闭页面）遗留的数据，导入失败后清除本次写入。 */
 export const clearStaging = async (): Promise<void> => {
