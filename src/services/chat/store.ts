@@ -33,8 +33,13 @@ import {
 } from './types.js'
 
 /** 模型不再写死，统一从设置读取（见 services/settings.ts） */
-/** 所有生成请求统一携带的助手身份说明 */
-const SYSTEM_PROMPT = '该助手为DeepSeek，由深度求索公司创造。'
+/**
+ * 系统提示词。
+ * 留空：不向模型注入任何助手身份说明。
+ * 原版这里写的是「该助手为DeepSeek…」，会强制模型以助手口吻回答，
+ * 也会在换了别的模型后仍然自称 DeepSeek，对角色扮演干扰很大。
+ */
+const SYSTEM_PROMPT = ''
 /** 保留最近打开的详情；当前会话、生成中及尚未成功保存的会话不淘汰。 */
 const SESSION_CACHE_LIMIT = 5
 /** 安全审核固定开启，所有请求都走扩展模式 */

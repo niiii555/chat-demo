@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { TtsVoice } from './api/speech.js'
 import { normalizeLocation, type UserLocation } from './location.js'
-import { DEFAULT_MODEL } from './models.js'
+import { DEFAULT_MODEL, MODEL_OPTIONS } from './models.js'
 
 export type Locale = 'zh-CN' | 'en-US'
 
@@ -91,13 +91,19 @@ const initialThemePreference = (): ThemePreference => {
 /** 未保存过时使用服务端默认音色 stella（海星） */
 const initialTtsVoice = (): TtsVoice => (read(KEYS.ttsVoice) === 'tide' ? 'tide' : 'stella')
 
+/** 已保存的模型可能来自旧版本或已被移除；不在当前清单里就回落到默认。 */
+const initialModel = (): string => {
+  const saved = read(KEYS.model)
+  return saved && MODEL_OPTIONS.some((option) => option.id === saved) ? saved : DEFAULT_MODEL
+}
+
 export const useSettings = create<Settings>(() => ({
   apiKey: read(KEYS.apiKey),
   locale: initialLocale(),
   location: initialLocation(),
   themePreference: initialThemePreference(),
   ttsVoice: initialTtsVoice(),
-  model: read(KEYS.model) || DEFAULT_MODEL,
+  model: initialModel(),
   thinking: read(KEYS.thinking) === 'true',
   search: read(KEYS.search) === 'true',
   siderCollapsed: read(KEYS.siderCollapsed) === 'true',
